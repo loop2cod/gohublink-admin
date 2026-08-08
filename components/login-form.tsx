@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { LoaderCircle, Lock } from "lucide-react"
+import { Eye, EyeOff, LoaderCircle } from "lucide-react"
 
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ export function LoginForm() {
   const [username, setUsername] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [showPassword, setShowPassword] = React.useState(false)
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -46,48 +47,52 @@ export function LoginForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="rounded-xl border border-border bg-card/70 p-2.5 backdrop-blur-sm"
+      className="flex flex-col gap-5 rounded border border-border/80 bg-card/60 p-6 shadow-[0_20px_60px_-20px_var(--fx-7)] backdrop-blur-xl sm:p-7"
     >
-      <div className="flex flex-col border rounded-lg">
-        <div className="border-b border-border p-5">
-          <div className="flex items-center gap-2.5">
-            <Lock className="size-4 text-foreground" />
-            <h2 className="text-base font-medium text-foreground">
-              Administrator credentials
-            </h2>
-          </div>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            name="username"
+            autoComplete="username"
+            placeholder="Enter your username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            autoFocus
+          />
         </div>
-        <div className="flex flex-col gap-4 p-5">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              name="username"
-              autoComplete="username"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-            />
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <span className="text-xs text-muted-foreground">
-                Keep it secret
-              </span>
-            </div>
+          <div className="relative">
             <Input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="pr-10"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-ring/40"
+            >
+              {showPassword ? (
+                <EyeOff className="size-4.5" />
+              ) : (
+                <Eye className="size-4.5" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -95,10 +100,16 @@ export function LoginForm() {
       <Button
         type="submit"
         disabled={isSubmitting}
-        className="mt-2.5 h-11 w-full text-base"
+        className="mt-1 h-11 w-full text-base"
       >
-        {isSubmitting && <LoaderCircle className="animate-spin" />}
-        {isSubmitting ? "Signing in…" : "Sign in"}
+        {isSubmitting ? (
+          <>
+            <LoaderCircle className="animate-spin" />
+            Signing in…
+          </>
+        ) : (
+          "Sign in"
+        )}
       </Button>
     </form>
   )
