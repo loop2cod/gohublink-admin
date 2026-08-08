@@ -2,36 +2,44 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, MapPin, Plus, Search } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  QrCode,
+  Search,
+  Smartphone,
+} from "lucide-react"
 
 import { DashboardShell } from "@/components/dashboard-shell"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { get, type Spot } from "@/lib/api"
+import { get, type Scan, type ScanStatus } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 8
+const PAGE_SIZE = 10
 
-type StatusFilter = "all" | "live" | "inactive"
+type StatusFilter = "all" | ScanStatus
 
 const filters: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "live", label: "Live" },
-  { value: "inactive", label: "Inactive" },
+  { value: "pending", label: "Pending" },
+  { value: "matched", label: "Matched" },
+  { value: "expired", label: "Expired" },
 ]
 
-function matchesQuery(spot: Spot, q: string) {
-  if (!q) return true
-  return [spot.name, spot.id, spot.incharge_name, spot.incharge_phone]
-    .filter(Boolean)
-    .some((v) => v.toLowerCase().includes(q))
+const statusStyles: Record<ScanStatus, string> = {
+  pending: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  matched: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  expired: "bg-secondary text-muted-foreground",
 }
 
-function matchesStatus(spot: Spot, status: StatusFilter) {
-  if (status === "live") return spot.is_active
-  if (status === "inactive") return !spot.is_active
-  return true
+function matchesQuery(scan: Scan, q: string) {
+  if (!q) return true
+  return [scan.scan_token, scan.spot_id, scan.ip_address, scan.customer_name]
+    .filter(Boolean)
+    .some((v) => v!.toLowerCase().includes(q))
 }
 
 function buildPageNumbers(
@@ -53,32 +61,44 @@ function buildPageNumbers(
   return result
 }
 
-function usageFromId(id: string): number {
-  let h = 0
-  for (let i = 0; i < id.length; i++) {
-    h = (h * 31 + id.charCodeAt(i)) | 0
-  }
-  return 8 + (Math.abs(h) % 91)
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
-export default function SpotsPage() {
-  const [spots, setSpots] = React.useState<Spot[] | null>(null)
+function expiryLabel(scan: Scan) {
+  const diff = new Date(scan.expires_at).getTime() - Date.now()
+  if (scan.status !== "pending") return null
+  if (diff <= 0) return "Expired"
+  const mins = Math.max(0, Math.round(diff / 60000))
+  return `Expires in ${mins} min`
+}
+
+export default function ScansPage() {
+  const [scans, setScans] = React.useState<Scan[] | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [query, setQuery] = React.useState("")
   const [status, setStatus] = React.useState<StatusFilter>("all")
   const [page, setPage] = React.useState(1)
 
   React.useEffect(() => {
-    get<{ spots: Spot[] }>("/spots")
-      .then((res) => setSpots(res.spots))
+    get<{ scans: Scan[] }>("/scans")
+      .then((res) => setScans(res.scans))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
   }, [])
 
   const filtered = React.useMemo(() => {
-    if (!spots) return []
+    if (!scans) return []
     const q = query.trim().toLowerCase()
-    return spots.filter((s) => matchesQuery(s, q) && matchesStatus(s, status))
-  }, [spots, query, status])
+    return scans.filter(
+      (s) =>
+        matchesQuery(s, q) && (status === "all" || s.status === status)
+    )
+  }, [scans, query, status])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -92,20 +112,15 @@ export default function SpotsPage() {
 
   return (
     <DashboardShell
-      title="Spots"
-      subtitle="All spaces in the network"
-      action={
-        <Link href="/spots/new" className={buttonVariants()}>
-          <Plus /> New spot
-        </Link>
-      }
+      title="Scans"
+      subtitle="QR check-ins across the network"
     >
       {/* Toolbar: search + status filter */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search spots…"
+            placeholder="Search token, spot, IP…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -139,9 +154,9 @@ export default function SpotsPage() {
 
       {error ? (
         <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
-          Couldn&apos;t load spots. {error}
+          Couldn&apos;t load scans. {error}
         </div>
-      ) : spots === null ? (
+      ) : scans === null ? (
         <div className="mt-5 space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full rounded-lg" />
@@ -149,14 +164,14 @@ export default function SpotsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="mt-5 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
-          <MapPin className="size-8 text-muted-foreground" />
+          <QrCode className="size-8 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium text-foreground">
-              {spots.length === 0 ? "No spots yet" : "No matches found"}
+              {scans.length === 0 ? "No scans yet" : "No matches found"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {spots.length === 0
-                ? "Create your first spot to get started."
+              {scans.length === 0
+                ? "QR check-ins will show up here as customers scan in."
                 : "Try adjusting your search or filters."}
             </p>
           </div>
@@ -165,73 +180,69 @@ export default function SpotsPage() {
         <section className="mt-5 overflow-hidden rounded-lg border border-border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
             <div>
-              <p className="font-black">Spot directory</p>
+              <p className="font-black">Check-in directory</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {filtered.length} location{filtered.length === 1 ? "" : "s"}{" "}
-                matching your search
+                {filtered.length} scan{filtered.length === 1 ? "" : "s"} matching
+                your search
               </p>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left">
+            <table className="w-full min-w-[700px] text-left">
               <thead className="bg-secondary/60 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
+                  <th className="px-4 py-2.5">Token</th>
                   <th className="px-4 py-2.5">Spot</th>
-                  <th className="px-4 py-2.5">Location</th>
+                  <th className="px-4 py-2.5">Device</th>
+                  <th className="px-4 py-2.5">Scanned at</th>
                   <th className="px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5">Usage</th>
                   <th className="px-4 py-2.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pageItems.map((spot) => (
-                  <tr key={spot.id} className="text-xs">
+                {pageItems.map((scan) => (
+                  <tr key={scan.id} className="text-xs">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="grid size-8 place-items-center rounded-md bg-accent text-xs font-black text-primary">
-                          {spot.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-bold">{spot.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {spot.idcard_type || "Hub"}
-                          </p>
-                        </div>
+                      <span className="rounded-md bg-accent px-2 py-1 font-mono text-xs font-black tracking-widest text-primary">
+                        {scan.scan_token}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-bold">{scan.spot_id}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Smartphone className="size-3.5" />
+                        <span className="capitalize">{scan.device_type}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {spot.latitude.toFixed(4)}, {spot.longitude.toFixed(4)}
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="size-3.5" />
+                        {formatTime(scan.scanned_at)}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
                           "rounded-sm px-2 py-1 text-[10px] font-bold",
-                          spot.is_active
-                            ? "bg-primary/10 text-primary"
-                            : "bg-secondary text-muted-foreground"
+                          statusStyles[scan.status]
                         )}
                       >
-                        {spot.is_active ? "Live" : "Inactive"}
+                        {scan.status}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1 w-20 rounded-full bg-secondary">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{ width: `${usageFromId(spot.id)}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-bold">
-                          {usageFromId(spot.id)}%
-                        </span>
-                      </div>
+                      {expiryLabel(scan) && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {expiryLabel(scan)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button className="font-bold text-primary hover:underline">
-                        Manage
-                      </button>
+                      <Link
+                        href={`/scans/${scan.id}`}
+                        className="font-bold text-primary hover:underline"
+                      >
+                        View
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -241,7 +252,7 @@ export default function SpotsPage() {
 
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-4 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              Showing {start}–{end} of {filtered.length} location
+              Showing {start}–{end} of {filtered.length} scan
               {filtered.length === 1 ? "" : "s"}
             </p>
 

@@ -253,3 +253,20 @@ export interface Spot {
   is_active: boolean;
   created_at: string;
 }
+
+export type ScanStatus = "pending" | "matched" | "expired";
+
+export interface Scan {
+  id: number;
+  scan_token: string;
+  spot_id: string;
+  ip_address: string;
+  user_agent: string;
+  device_type: string;
+  city: string;
+  scanned_at: string;
+  expires_at: string;
+  status: ScanStatus;
+  phone_number: string | null;
+  customer_name: string | null;
+}
