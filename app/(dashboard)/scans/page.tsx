@@ -3,9 +3,12 @@
 import * as React from "react"
 import Link from "next/link"
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Filter,
+  MapPin,
   QrCode,
   Search,
   Smartphone,
@@ -15,31 +18,37 @@ import { DashboardShell } from "@/components/dashboard-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { get, type Scan, type ScanStatus } from "@/lib/api"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu"
+import {
+  get,
+  type Scan,
+  type ScanStatus,
+  type ScanListResponse,
+  type ScanStats,
+} from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZE = 10
 
 type StatusFilter = "all" | ScanStatus
 
-const filters: { value: StatusFilter; label: string }[] = [
+const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
   { value: "matched", label: "Matched" },
   { value: "expired", label: "Expired" },
 ]
 
-const statusStyles: Record<ScanStatus, string> = {
-  pending: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  matched: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  expired: "bg-secondary text-muted-foreground",
-}
-
-function matchesQuery(scan: Scan, q: string) {
-  if (!q) return true
-  return [scan.scan_token, scan.spot_id, scan.ip_address, scan.customer_name]
-    .filter(Boolean)
-    .some((v) => v!.toLowerCase().includes(q))
+const statusBadgeDot: Record<ScanStatus, string> = {
+  pending: "bg-amber-500",
+  matched: "bg-emerald-500",
+  expired: "bg-muted-foreground",
 }
 
 function buildPageNumbers(
@@ -75,52 +84,115 @@ function expiryLabel(scan: Scan) {
   if (scan.status !== "pending") return null
   if (diff <= 0) return "Expired"
   const mins = Math.max(0, Math.round(diff / 60000))
-  return `Expires in ${mins} min`
+  if (mins < 60) return `Expires in ${mins} min`
+  return `Expires in ${Math.round(mins / 60)} hr`
 }
 
 export default function ScansPage() {
   const [scans, setScans] = React.useState<Scan[] | null>(null)
+  const [stats, setStats] = React.useState<ScanStats | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [total, setTotal] = React.useState(0)
+  const [loading, setLoading] = React.useState(true)
+
   const [query, setQuery] = React.useState("")
   const [status, setStatus] = React.useState<StatusFilter>("all")
+  const [device, setDevice] = React.useState("all")
   const [page, setPage] = React.useState(1)
 
+  // Debounced query so we don't hit the backend on every keystroke.
+  const [debouncedQuery, setDebouncedQuery] = React.useState("")
   React.useEffect(() => {
-    get<{ scans: Scan[] }>("/scans")
-      .then((res) => setScans(res.scans))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+    const id = setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(1)
+    }, 350)
+    return () => clearTimeout(id)
+  }, [query])
+
+  // Load stats (summary cards + device options) once.
+  React.useEffect(() => {
+    get<ScanStats>("/scans/stats")
+      .then(setStats)
+      .catch(() => {})
   }, [])
 
-  const filtered = React.useMemo(() => {
-    if (!scans) return []
-    const q = query.trim().toLowerCase()
-    return scans.filter(
-      (s) =>
-        matchesQuery(s, q) && (status === "all" || s.status === status)
-    )
-  }, [scans, query, status])
+  // Load scans with server-side filters + pagination.
+  React.useEffect(() => {
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true)
+    })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  const start = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
-  const end = Math.min(safePage * PAGE_SIZE, filtered.length)
-  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+    const params = new URLSearchParams()
+    params.set("page", String(page))
+    params.set("limit", String(PAGE_SIZE))
+    if (status !== "all") params.set("status", status)
+    if (device !== "all") params.set("device", device)
+    if (debouncedQuery) params.set("q", debouncedQuery)
+
+    get<ScanListResponse>(`/scans?${params.toString()}`)
+      .then((res) => {
+        if (cancelled) return
+        setScans(res.scans)
+        setTotal(res.total)
+        setError(null)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : "Failed to load")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [page, status, device, debouncedQuery])
 
   function resetPage() {
     setPage(1)
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const start = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
+  const end = Math.min(safePage * PAGE_SIZE, total)
+
+  const summary = [
+    { label: "Total", value: stats?.total ?? 0, accent: "text-foreground" },
+    { label: "Matched", value: stats?.matched ?? 0, accent: "text-emerald-600 dark:text-emerald-400" },
+    { label: "Pending", value: stats?.pending ?? 0, accent: "text-amber-600 dark:text-amber-400" },
+    { label: "Expired", value: stats?.expired ?? 0, accent: "text-muted-foreground" },
+  ]
 
   return (
     <DashboardShell
       title="Scans"
       subtitle="QR check-ins across the network"
     >
-      {/* Toolbar: search + status filter */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-sm">
+      {/* ── Stats ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {summary.map((s) => (
+          <div
+            key={s.label}
+            className="rounded-xl border border-border bg-card p-4"
+          >
+            <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
+            <p className={cn("mt-1 text-2xl font-black tabular-nums", s.accent)}>
+              {s.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Toolbar: search + filters ────────────────── */}
+      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-sm">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search token, spot, IP…"
+            placeholder="Search token, city, device, IP…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -130,47 +202,80 @@ export default function ScansPage() {
           />
         </div>
 
-        <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-card p-1">
-          {filters.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => {
-                setStatus(f.value)
-                resetPage()
-              }}
-              className={cn(
-                "h-8 rounded-md px-3 text-sm font-medium transition-colors",
-                status === f.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status filter */}
+          <div className="flex w-fit items-center gap-1 rounded-lg border border-border bg-card p-1">
+            {statusFilters.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => {
+                  setStatus(f.value)
+                  resetPage()
+                }}
+                className={cn(
+                  "h-8 rounded-md px-3 text-sm font-medium transition-colors",
+                  status === f.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Device filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  <Filter className="size-4" />
+                  {device === "all" ? "All devices" : device}
+                  <ChevronDown className="size-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup
+                value={device}
+                onValueChange={(v) => {
+                  setDevice(v)
+                  resetPage()
+                }}
+              >
+                <DropdownMenuRadioItem value="all">All devices</DropdownMenuRadioItem>
+                {(stats?.devices ?? []).map((d) => (
+                  <DropdownMenuRadioItem key={d} value={d} className="capitalize">
+                    {d}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
+      {/* ── Table ────────────────────────────────────── */}
       {error ? (
         <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-sm text-destructive">
           Couldn&apos;t load scans. {error}
         </div>
-      ) : scans === null ? (
+      ) : loading ? (
         <div className="mt-5 space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full rounded-lg" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : scans === null || scans.length === 0 ? (
         <div className="mt-5 flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
           <QrCode className="size-8 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium text-foreground">
-              {scans.length === 0 ? "No scans yet" : "No matches found"}
+              {total === 0 ? "No scans yet" : "No matches found"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {scans.length === 0
+              {total === 0
                 ? "QR check-ins will show up here as customers scan in."
                 : "Try adjusting your search or filters."}
             </p>
@@ -178,22 +283,24 @@ export default function ScansPage() {
         </div>
       ) : (
         <section className="mt-5 overflow-hidden rounded-lg border border-border bg-card">
+          {/* Table header */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
             <div>
               <p className="font-black">Check-in directory</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {filtered.length} scan{filtered.length === 1 ? "" : "s"} matching
-                your search
+                {total} scan{total === 1 ? "" : "s"} matching your search
               </p>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-left">
+            <table className="w-full min-w-[820px] text-left">
               <thead className="bg-secondary/60 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2.5">Token</th>
                   <th className="px-4 py-2.5">Spot</th>
+                  <th className="px-4 py-2.5">City</th>
+                  <th className="px-4 py-2.5">Region</th>
                   <th className="px-4 py-2.5">Device</th>
                   <th className="px-4 py-2.5">Scanned at</th>
                   <th className="px-4 py-2.5">Status</th>
@@ -201,34 +308,44 @@ export default function ScansPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pageItems.map((scan) => (
-                  <tr key={scan.id} className="text-xs">
+                {scans.map((scan) => (
+                  <tr key={scan.id} className="text-xs transition-colors hover:bg-muted/40">
                     <td className="px-4 py-3">
                       <span className="rounded-md bg-accent px-2 py-1 font-mono text-xs font-black tracking-widest text-primary">
                         {scan.scan_token}
                       </span>
                     </td>
                     <td className="px-4 py-3 font-bold">{scan.spot_id}</td>
+                    <td className="px-4 py-3">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
+                        {scan.city || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {scan.region || "—"}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       <div className="flex items-center gap-1.5">
-                        <Smartphone className="size-3.5" />
-                        <span className="capitalize">{scan.device_type}</span>
+                        <Smartphone className="size-3.5 shrink-0" />
+                        <span className="capitalize">{scan.device_type || "—"}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="size-3.5" />
+                        <Clock className="size-3.5 shrink-0" />
                         {formatTime(scan.scanned_at)}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          "rounded-sm px-2 py-1 text-[10px] font-bold",
-                          statusStyles[scan.status]
-                        )}
-                      >
-                        {scan.status}
+                      <span className="inline-flex items-center gap-1.5 rounded-sm bg-secondary/60 px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                        <span
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            statusBadgeDot[scan.status]
+                          )}
+                        />
+                        <span className="capitalize">{scan.status}</span>
                       </span>
                       {expiryLabel(scan) && (
                         <p className="mt-1 text-[10px] text-muted-foreground">
@@ -250,10 +367,11 @@ export default function ScansPage() {
             </table>
           </div>
 
+          {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-4 sm:flex-row">
             <p className="text-xs text-muted-foreground">
-              Showing {start}–{end} of {filtered.length} scan
-              {filtered.length === 1 ? "" : "s"}
+              Showing {start}–{end} of {total} scan
+              {total === 1 ? "" : "s"}
             </p>
 
             <div className="flex items-center gap-1">
@@ -261,7 +379,7 @@ export default function ScansPage() {
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                disabled={safePage <= 1}
+                disabled={safePage <= 1 || loading}
                 onClick={() => setPage(safePage - 1)}
                 aria-label="Previous page"
               >
@@ -287,6 +405,7 @@ export default function ScansPage() {
                       type="button"
                       size="icon-sm"
                       variant={p === safePage ? "default" : "ghost"}
+                      disabled={loading}
                       onClick={() => setPage(p)}
                       aria-label={`Go to page ${p}`}
                       aria-current={p === safePage ? "page" : undefined}
@@ -301,7 +420,7 @@ export default function ScansPage() {
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                disabled={safePage >= totalPages}
+                disabled={safePage >= totalPages || loading}
                 onClick={() => setPage(safePage + 1)}
                 aria-label="Next page"
               >

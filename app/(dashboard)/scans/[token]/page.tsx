@@ -107,7 +107,7 @@ function SectionCard({
 }) {
   return (
     <Card className={cn("border-border", className)}>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 p-4 sm:p-5">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 p-3 !pb-2">
         <div className="flex items-center gap-2.5">
           <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10">
             <Icon className="size-4 text-primary" />

@@ -304,3 +304,19 @@ export interface Scan {
   phone_number: string | null;
   customer_name: string | null;
 }
+
+export interface ScanListResponse {
+  scans: Scan[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface ScanStats {
+  total: number;
+  matched: number;
+  pending: number;
+  expired: number;
+  devices: string[];
+}
