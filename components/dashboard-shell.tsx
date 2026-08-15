@@ -2,7 +2,14 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, LogOut, MapPin, Plus, ScanLine } from "lucide-react"
+import {
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Plus,
+  ScanLine,
+  Users,
+} from "lucide-react"
 
 import { useAuth } from "@/components/auth-provider"
 import { cn } from "@/lib/utils"
@@ -18,6 +25,12 @@ const nav = [
     label: "Scans",
     href: "/scans",
     icon: ScanLine,
+    exact: false,
+  },
+  {
+    label: "Customers",
+    href: "/customers",
+    icon: Users,
     exact: false,
   },
   {

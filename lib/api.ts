@@ -320,3 +320,72 @@ export interface ScanStats {
   expired: number;
   devices: string[];
 }
+
+export interface CustomerListItem {
+  phone_number: string;
+  name: string;
+  profile_picture_url?: string;
+  first_scan_at: string;
+  last_active: string;
+  total_scans: number;
+  matched_scans: number;
+  pending_scans: number;
+  spots_visited: number;
+  usual_city?: string;
+  usual_region?: string;
+  usual_country?: string;
+}
+
+export interface CustomerListResponse {
+  customers: CustomerListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface CustomerSummary {
+  total_scans: number;
+  matched_scans: number;
+  pending_scans: number;
+  expired_scans: number;
+  spots_visited: number;
+  regions_seen: number;
+}
+
+export interface LocationSummary {
+  city?: string;
+  region?: string;
+  country?: string;
+  country_code?: string;
+  count: number;
+}
+
+export interface NetworkSummary {
+  ip_address?: string;
+  isp?: string;
+  network_org?: string;
+  count: number;
+}
+
+export interface ScanFlags {
+  different_region: boolean;
+  different_ip: boolean;
+}
+
+export interface CustomerScan extends Scan {
+  flags: ScanFlags;
+}
+
+export interface CustomerDetail {
+  phone_number: string;
+  name: string;
+  profile_picture_url?: string;
+  first_scan_at: string;
+  last_active: string;
+  preferred_location_id: number;
+  summary: CustomerSummary;
+  usual_location: LocationSummary | null;
+  usual_network: NetworkSummary | null;
+  scans: CustomerScan[];
+}
