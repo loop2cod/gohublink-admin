@@ -118,7 +118,7 @@ export function DashboardShell({
 
         {/* User */}
         <div className="shrink-0 border-t border-sidebar-border p-3 lg:p-4">
-          <div className="flex items-center justify-center gap-3 lg:justify-start lg:px-1">
+          <div className="flex flex-col items-center gap-2 lg:flex-row lg:justify-start lg:gap-3 lg:px-1">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
               {(username ?? "A").charAt(0).toUpperCase()}
             </div>
