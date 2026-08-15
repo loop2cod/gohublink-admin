@@ -260,13 +260,47 @@ export interface Scan {
   id: number;
   scan_token: string;
   spot_id: string;
-  ip_address: string;
-  user_agent: string;
-  device_type: string;
-  city: string;
+  status: ScanStatus;
   scanned_at: string;
   expires_at: string;
-  status: ScanStatus;
+
+  ip_address: string;
+  ipv6_address?: string;
+  isp?: string;
+  as_number?: string;
+  as_organization?: string;
+  connection_type?: string;
+  network_org?: string;
+  proxy?: boolean;
+  hosting?: boolean;
+
+  user_agent: string;
+  device_type: string;
+  device_brand?: string;
+  device_model?: string;
+  os_name?: string;
+  os_version?: string;
+  browser_name?: string;
+  browser_version?: string;
+  language?: string;
+
+  city?: string;
+  region?: string;
+  region_code?: string;
+  country?: string;
+  country_name?: string;
+  postal_code?: string;
+  timezone?: string;
+  latitude?: number;
+  longitude?: number;
+  location_accuracy?: number;
+
+  referrer?: string;
+  referrer_host?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+
   phone_number: string | null;
   customer_name: string | null;
 }

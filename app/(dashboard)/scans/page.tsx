@@ -238,7 +238,7 @@ export default function ScansPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link
-                        href={`/scans/${scan.id}`}
+                        href={`/scans/${scan.scan_token}`}
                         className="font-bold text-primary hover:underline"
                       >
                         View
