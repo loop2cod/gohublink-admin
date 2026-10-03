@@ -389,3 +389,59 @@ export interface CustomerDetail {
   usual_network: NetworkSummary | null;
   scans: CustomerScan[];
 }
+
+export interface Division {
+  id: string;
+  city_id: string;
+  name: string;
+  code: string;
+  center_lat: number;
+  center_lng: number;
+  polygon_geojson: string;
+  color?: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface City {
+  id: string;
+  name: string;
+  region: string;
+  state: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  boundary_geojson?: string;
+  is_active: boolean;
+  divisions?: Division[];
+  division_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateDivisionInput {
+  id?: string;
+  name: string;
+  code?: string;
+  center_lat: number;
+  center_lng: number;
+  polygon_geojson: string;
+  color?: string;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+export interface CreateCityInput {
+  id?: string;
+  name: string;
+  region: string;
+  state?: string;
+  country?: string;
+  latitude: number;
+  longitude: number;
+  boundary_geojson?: string;
+  is_active?: boolean;
+  divisions: CreateDivisionInput[];
+}
