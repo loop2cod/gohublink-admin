@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   LogOut,
+  Map,
   MapPin,
   Plus,
   ScanLine,
@@ -22,6 +23,18 @@ const nav = [
     exact: true,
   },
   {
+    label: "Cities",
+    href: "/cities",
+    icon: Map,
+    exact: false,
+  },
+  {
+    label: "Spots",
+    href: "/spots",
+    icon: MapPin,
+    exact: false,
+  },
+  {
     label: "Scans",
     href: "/scans",
     icon: ScanLine,
@@ -31,12 +44,6 @@ const nav = [
     label: "Customers",
     href: "/customers",
     icon: Users,
-    exact: false,
-  },
-  {
-    label: "Spots",
-    href: "/spots",
-    icon: MapPin,
     exact: false,
   },
 ]
